@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My World</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #ui {
+    color: #c8f0c8;
+    font-size: 11px;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+
+  #gameCanvas {
+    border: 2px solid #2a4a2a;
+    box-shadow: 0 0 40px #0f3a0f88, 0 0 80px #0a1f0a44;
+    image-rendering: pixelated;
+    cursor: none;
+  }
+
+  #hud {
+    color: #7abf7a;
+    font-size: 10px;
+    letter-spacing: 1px;
+    margin-top: 8px;
+    opacity: 0.5;
+  }
+
+  #notification {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #0f2a0f;
+    border: 1px solid #3a7a3a;
+    color: #90df90;
+    padding: 8px 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div id="ui">⬛ MY WORLD ⬛</div>
+<canvas id="gameCanvas" width="640" height="400"></canvas>
+<div id="hud">WASD / ARROW KEYS TO MOVE &nbsp;|&nbsp; ENTER / E TO INTERACT</div>
+<div id="notification"></div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
+const TILE = 16;
+const COLS = Math.floor(canvas.width / TILE);
+const ROWS = Math.floor(canvas.height / TILE);
+const WORLD_COLS = 80;
+const WORLD_ROWS = 50;
+
+// ─── TILE IDs ────────────────────────────────────────────────────────────────
+const T = {
+  GRASS:     0,
+  DARK_GRASS:1,
+  DIRT:      2,
+  PATH:      3,
+  WATER:     4,
+  WATER_DEEP:5,
+  TREE_BASE: 6,
+  TREE_TOP:  7,
+  STONE:     8,
+  STONE_DARK:9,
+  SAND:      10,
+  FLOWER_R:  11,
+  FLOWER_Y:  12,
+  PORTAL_FILES:  20,
+  PORTAL_PLEX:   21,
+  PORTAL_GAMES:  22,
+  PORTAL_ABOUT:  23,
+  SIGN:      30,
+  CHEST:     31,
+};
+
+// ─── COLORS ──────────────────────────────────────────────────────────────────
+const COLORS = {
+  [T.GRASS]:       ['#3a7a3a','#2f6e2f','#4a8a4a'],
+  [T.DARK_GRASS]:  ['#2a5a2a','#1f4e1f','#354f35'],
+  [T.DIRT]:        ['#7a5a3a','#6a4a2a','#8a6a4a'],
+  [T.PATH]:        ['#9a8a6a','#8a7a5a','#aaa070'],
+  [T.WATER]:       ['#3a6aaa','#2a5a9a','#4a7aba'],
+  [T.WATER_DEEP]:  ['#1a3a6a','#12305a','#2a4a7a'],
+  [T.TREE_BASE]:   ['#4a7a2a','#3a6a1a','#5a8a3a'],
+  [T.TREE_TOP]:    ['#2a5a1a','#1a4a0a','#3a6a2a'],
+  [T.STONE]:       ['#8a8a8a','#7a7a7a','#9a9a9a'],
+  [T.STONE_DARK]:  ['#5a5a5a','#4a4a4a','#6a6a6a'],
+  [T.SAND]:        ['#c8b878','#b8a868','#d8c888'],
+  [T.FLOWER_R]:    ['#3a7a3a','#cc3344','#3a7a3a'],
+  [T.FLOWER_Y]:    ['#3a7a3a','#ddcc22','#3a7a3a'],
+};
+
+// ─── PORTAL CONFIG ───────────────────────────────────────────────────────────
+const PORTALS = [
+  { id: T.PORTAL_FILES,  label: '[ FILES ]',   color: '#ff9944', glow: '#ff6600', x: 15, y: 10, desc: 'Cloud Files' },
+  { id: T.PORTAL_PLEX,   label: '[ PLEX ]',    color: '#e5a00d', glow: '#e5a00d', x: 35, y: 8,  desc: 'Media Server', url: 'https://www.plex.tv' },
+  { id: T.PORTAL_GAMES,  label: '[ GAMES ]',   color: '#44aaff', glow: '#0066ff', x: 55, y: 12, desc: 'Mini Games' },
+  { id: T.PORTAL_ABOUT,  label: '[ ABOUT ]',   color: '#aa44ff', glow: '#6600ff', x: 25, y: 35, desc: 'About Me' },
+];
+
+// ─── WORLD GENERATION ────────────────────────────────────────────────────────
+const world = [];
+
+function noise(x, y, seed = 0) {
+  let h = (x * 374761393 + y * 668265263 + seed) | 0;
+  h = (h ^ (h >> 13)) * 1274126177;
+  return ((h ^ (h >> 16)) & 0x7fffffff) / 0x7fffffff;
+}
+
+function fbm(x, y, oct = 4) {
+  let v = 0, amp = 0.5, freq = 1, max = 0;
+  for (let i = 0; i < oct; i++) {
+    v += noise(Math.floor(x * freq), Math.floor(y * freq), i * 100) * amp;
+    max += amp; amp *= 0.5; freq *= 2;
+  }
+  return v / max;
+}
+
+// Init world
+for (let y = 0; y < WORLD_ROWS; y++) {
+  world[y] = [];
+  for (let x = 0; x < WORLD_COLS; x++) {
+    const h = fbm(x / 12, y / 12);
+    const m = fbm(x / 6, y / 6, 2);
+
+    let tile;
+    if (h < 0.28)       tile = T.WATER_DEEP;
+    else if (h < 0.34)  tile = T.WATER;
+    else if (h < 0.38)  tile = T.SAND;
+    else if (h < 0.72)  tile = m > 0.55 ? T.DARK_GRASS : T.GRASS;
+    else if (h < 0.80)  tile = T.STONE;
+    else                tile = T.STONE_DARK;
+
+    // Scatter flowers on grass
+    if (tile === T.GRASS && noise(x, y, 999) > 0.93) {
+      tile = noise(x, y, 888) > 0.5 ? T.FLOWER_R : T.FLOWER_Y;
+    }
+
+    world[y][x] = { tile, walkable: ![T.WATER, T.WATER_DEEP, T.STONE_DARK].includes(tile) };
+  }
+}
+
+// Place some trees on dark grass areas FIRST (before paths are carved)
+for (let y = 1; y < WORLD_ROWS - 1; y++) {
+  for (let x = 1; x < WORLD_COLS - 1; x++) {
+    if (world[y][x].tile === T.DARK_GRASS && noise(x, y, 777) > 0.82) {
+      world[y][x].tile = T.TREE_BASE;
+      world[y][x].walkable = false;
+      if (world[y-1][x]) { world[y-1][x].tile = T.TREE_TOP; world[y-1][x].walkable = false; }
+    }
+  }
+}
+
+// Carve paths between portals + spawn AFTER trees, so paths always clear them
+function carvePath(x0, y0, x1, y1) {
+  let cx = x0, cy = y0;
+  while (cx !== x1 || cy !== y1) {
+    world[cy][cx].tile = T.PATH;
+    world[cy][cx].walkable = true;
+    if (cx !== x1) cx += cx < x1 ? 1 : -1;
+    else cy += cy < y1 ? 1 : -1;
+  }
+  world[cy][cx].tile = T.PATH;
+}
+
+const spawnX = 20, spawnY = 22;
+PORTALS.forEach(p => {
+  carvePath(spawnX, spawnY, p.x, p.y);
+  // Place portal & clear area
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      if (world[p.y + dy] && world[p.y + dy][p.x + dx]) {
+        world[p.y + dy][p.x + dx].tile = T.PATH;
+        world[p.y + dy][p.x + dx].walkable = true;
+      }
+    }
+  world[p.y][p.x].tile = p.id;
+  world[p.y][p.x].walkable = true;
+  world[p.y][p.x].portal = p;
+});
+
+// ─── PLAYER ──────────────────────────────────────────────────────────────────
+const player = {
+  wx: spawnX * TILE + TILE/2,  // world position (pixels)
+  wy: spawnY * TILE + TILE/2,
+  speed: 1.5,
+  size: 10,
+  facing: 0, // 0=down 1=up 2=left 3=right
+  animFrame: 0,
+  animTimer: 0,
+  moving: false,
+};
+
+// Camera offset (world pixel coords of top-left of viewport)
+let camX = 0, camY = 0;
+
+// ─── INPUT ───────────────────────────────────────────────────────────────────
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.key] = true; e.preventDefault(); });
+window.addEventListener('keyup',   e => { keys[e.key] = false; });
+
+// ─── NOTIFICATION ────────────────────────────────────────────────────────────
+let notifTimer = 0;
+const notif = document.getElementById('notification');
+function showNotif(text) {
+  notif.textContent = text;
+  notif.style.opacity = 1;
+  notifTimer = 180;
+}
+
+// ─── ANIMATION TICK ──────────────────────────────────────────────────────────
+let tick = 0;
+
+// ─── UPDATE ──────────────────────────────────────────────────────────────────
+function update() {
+  tick++;
+
+  let dx = 0, dy = 0;
+  if (keys['ArrowLeft']  || keys['a'] || keys['A']) dx -= 1;
+  if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
+  if (keys['ArrowUp']    || keys['w'] || keys['W']) dy -= 1;
+  if (keys['ArrowDown']  || keys['s'] || keys['S']) dy += 1;
+
+  if (dx && dy) { dx *= 0.707; dy *= 0.707; }
+
+  player.moving = dx !== 0 || dy !== 0;
+
+  if (dx < 0) player.facing = 2;
+  else if (dx > 0) player.facing = 3;
+  else if (dy < 0) player.facing = 1;
+  else if (dy > 0) player.facing = 0;
+
+  if (player.moving) {
+    player.animTimer++;
+    if (player.animTimer > 8) { player.animFrame = (player.animFrame + 1) % 4; player.animTimer = 0; }
+  } else {
+    player.animFrame = 0;
+  }
+
+  const nx = player.wx + dx * player.speed;
+  const ny = player.wy + dy * player.speed;
+
+  // Collision
+  const checkWalkable = (px, py) => {
+    const tx = Math.floor(px / TILE);
+    const ty = Math.floor(py / TILE);
+    if (tx < 0 || ty < 0 || tx >= WORLD_COLS || ty >= WORLD_ROWS) return false;
+    return world[ty][tx].walkable;
+  };
+
+  const r = player.size / 2 - 1;
+  const canX = checkWalkable(nx + r, player.wy) && checkWalkable(nx - r, player.wy) &&
+               checkWalkable(nx + r, player.wy + r) && checkWalkable(nx - r, player.wy + r) &&
+               checkWalkable(nx + r, player.wy - r) && checkWalkable(nx - r, player.wy - r);
+  const canY = checkWalkable(player.wx, ny + r) && checkWalkable(player.wx, ny - r) &&
+               checkWalkable(player.wx + r, ny + r) && checkWalkable(player.wx - r, ny + r) &&
+               checkWalkable(player.wx + r, ny - r) && checkWalkable(player.wx - r, ny - r);
+
+  if (canX) player.wx = nx;
+  if (canY) player.wy = ny;
+
+  // Clamp world
+  player.wx = Math.max(TILE, Math.min(WORLD_COLS * TILE - TILE, player.wx));
+  player.wy = Math.max(TILE, Math.min(WORLD_ROWS * TILE - TILE, player.wy));
+
+  // Camera
+  camX = player.wx - canvas.width / 2;
+  camY = player.wy - canvas.height / 2;
+  camX = Math.max(0, Math.min(WORLD_COLS * TILE - canvas.width, camX));
+  camY = Math.max(0, Math.min(WORLD_ROWS * TILE - canvas.height, camY));
+
+  // Portal interaction
+  if (keys['Enter'] || keys['e'] || keys['E']) {
+    const ptx = Math.floor(player.wx / TILE);
+    const pty = Math.floor(player.wy / TILE);
+    const cell = world[pty] && world[pty][ptx];
+    if (cell && cell.portal) {
+      showNotif(`→ ENTERING: ${cell.portal.desc.toUpperCase()}`);
+      if (cell.portal.url) window.open(cell.portal.url, '_blank');
+      keys['Enter'] = false; keys['e'] = false; keys['E'] = false;
+    }
+  }
+
+  // Notification timer
+  if (notifTimer > 0) {
+    notifTimer--;
+    if (notifTimer === 20) notif.style.opacity = 0;
+  }
+}
+
+// ─── DRAW TILE ───────────────────────────────────────────────────────────────
+function drawTile(tile, sx, sy) {
+  const cols = COLORS[tile];
+  if (!cols) return;
+
+  // Base fill
+  ctx.fillStyle = cols[0];
+  ctx.fillRect(sx, sy, TILE, TILE);
+
+  // Variation pixel detail
+  ctx.fillStyle = cols[1];
+  // Top-left shadow
+  ctx.fillRect(sx, sy, TILE, 1);
+  ctx.fillRect(sx, sy, 1, TILE);
+
+  ctx.fillStyle = cols[2];
+  // Bottom-right highlight
+  ctx.fillRect(sx + TILE - 1, sy, 1, TILE);
+  ctx.fillRect(sx, sy + TILE - 1, TILE, 1);
+
+  // Special tile details
+  if (tile === T.FLOWER_R || tile === T.FLOWER_Y) {
+    ctx.fillStyle = '#3a7a3a';
+    ctx.fillRect(sx, sy, TILE, TILE);
+    ctx.fillStyle = cols[1];
+    ctx.fillRect(sx + 5, sy + 4, 5, 5);
+    ctx.fillRect(sx + 7, sy + 2, 1, 9);
+    ctx.fillRect(sx + 4, sy + 5, 9, 1);
+  }
+
+  if (tile === T.TREE_BASE) {
+    ctx.fillStyle = '#5a3a1a';
+    ctx.fillRect(sx + 6, sy + 8, 4, 8);
+    ctx.fillStyle = '#3a7a1a';
+    ctx.fillRect(sx + 2, sy + 2, 12, 10);
+    ctx.fillStyle = '#2a6a0a';
+    ctx.fillRect(sx + 4, sy, 8, 4);
+  }
+
+  if (tile === T.TREE_TOP) {
+    ctx.fillStyle = '#2a5a0a';
+    ctx.fillRect(sx, sy, TILE, TILE);
+    ctx.fillStyle = '#1a4a00';
+    ctx.fillRect(sx + 2, sy, 12, 12);
+    ctx.fillStyle = '#3a6a1a';
+    ctx.fillRect(sx + 4, sy + 2, 8, 8);
+  }
+
+  if (tile === T.WATER || tile === T.WATER_DEEP) {
+    const wt = Math.floor(tick / 20) % 2;
+    ctx.fillStyle = tile === T.WATER ? '#5a8acc' : '#2a4a8a';
+    ctx.fillRect(sx + (wt * 4), sy + 6, 4, 1);
+    ctx.fillRect(sx + ((1 - wt) * 4) + 8, sy + 12, 4, 1);
+  }
+}
+
+// ─── DRAW PORTAL ─────────────────────────────────────────────────────────────
+function drawPortal(portal, sx, sy) {
+  const pulse = Math.sin(tick * 0.05) * 0.4 + 0.6;
+
+  // Glow
+  const grad = ctx.createRadialGradient(sx + TILE/2, sy + TILE/2, 0, sx + TILE/2, sy + TILE/2, TILE * 1.5);
+  grad.addColorStop(0, portal.glow + Math.floor(pulse * 99).toString(16).padStart(2,'0'));
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.fillRect(sx - TILE, sy - TILE, TILE * 3, TILE * 3);
+
+  // Portal tile
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
+
+  ctx.strokeStyle = portal.color;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
+
+  // Spinning inner
+  ctx.save();
+  ctx.translate(sx + TILE/2, sy + TILE/2);
+  ctx.rotate(tick * 0.03);
+  ctx.fillStyle = portal.color + '88';
+  ctx.fillRect(-3, -3, 6, 6);
+  ctx.restore();
+}
+
+// ─── DRAW PLAYER ─────────────────────────────────────────────────────────────
+function drawPlayer(sx, sy) {
+  const bob = player.moving ? Math.sin(tick * 0.3) * 1 : 0;
+  const py = sy + bob;
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(sx - 3, sy + 8, 10, 3);
+
+  // Body
+  ctx.fillStyle = '#2255cc';
+  ctx.fillRect(sx - 3, py - 2, 10, 8);
+
+  // Head
+  ctx.fillStyle = '#f4c88a';
+  ctx.fillRect(sx - 2, py - 8, 8, 7);
+
+  // Eyes based on facing
+  ctx.fillStyle = '#000';
+  if (player.facing === 0) { // down
+    ctx.fillRect(sx, py - 5, 2, 2);
+    ctx.fillRect(sx + 3, py - 5, 2, 2);
+  } else if (player.facing === 1) { // up
+    // back of head
+    ctx.fillStyle = '#d4a87a';
+    ctx.fillRect(sx - 1, py - 7, 6, 3);
+  } else if (player.facing === 2) { // left
+    ctx.fillRect(sx, py - 5, 2, 2);
+  } else { // right
+    ctx.fillRect(sx + 1, py - 5, 2, 2);
+  }
+
+  // Legs (animated walk)
+  ctx.fillStyle = '#334477';
+  if (player.moving) {
+    const lf = player.animFrame;
+    const legOffset = [0, 2, 0, -2][lf];
+    ctx.fillRect(sx - 2, py + 6, 4, 4 + (legOffset > 0 ? legOffset : 0));
+    ctx.fillRect(sx + 2, py + 6, 4, 4 - (legOffset > 0 ? 0 : legOffset));
+  } else {
+    ctx.fillRect(sx - 2, py + 6, 4, 4);
+    ctx.fillRect(sx + 2, py + 6, 4, 4);
+  }
+
+  // Shoes
+  ctx.fillStyle = '#222';
+  ctx.fillRect(sx - 3, py + 9, 5, 2);
+  ctx.fillRect(sx + 2, py + 9, 5, 2);
+}
+
+// ─── DRAW PORTAL LABEL ───────────────────────────────────────────────────────
+function drawPortalLabel(portal, sx, sy) {
+  const px = player.wx - camX;
+  const py = player.wy - camY;
+  const pdx = sx - px;
+  const pdy = sy - py;
+  const dist = Math.sqrt(pdx * pdx + pdy * pdy);
+  if (dist > 80) return;
+
+  const alpha = Math.max(0, 1 - dist / 80);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#000a';
+  const tw = portal.label.length * 7 + 8;
+  ctx.fillRect(sx - tw / 2, sy - 28, tw, 14);
+  ctx.fillStyle = portal.color;
+  ctx.font = '9px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText(portal.label, sx, sy - 18);
+  ctx.restore();
+}
+
+// ─── DRAW ────────────────────────────────────────────────────────────────────
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const startX = Math.max(0, Math.floor(camX / TILE));
+  const endX = Math.min(WORLD_COLS, startX + COLS + 2);
+  const startY = Math.max(0, Math.floor(camY / TILE));
+  const endY = Math.min(WORLD_ROWS, startY + ROWS + 2);
+
+  // Draw tiles
+  for (let ty = startY; ty < endY; ty++) {
+    for (let tx = startX; tx < endX; tx++) {
+      const sx = tx * TILE - camX;
+      const sy = ty * TILE - camY;
+      const cell = world[ty][tx];
+
+      if (PORTALS.some(p => p.id === cell.tile)) {
+        const portal = cell.portal;
+        // Draw path under portal
+        ctx.fillStyle = COLORS[T.PATH][0];
+        ctx.fillRect(sx, sy, TILE, TILE);
+        drawPortal(portal, sx, sy);
+        drawPortalLabel(portal, sx + TILE / 2, sy + TILE / 2);
+      } else {
+        drawTile(cell.tile, sx, sy);
+      }
+    }
+  }
+
+  // Draw player
+  const psx = Math.round(player.wx - camX - player.size / 2);
+  const psy = Math.round(player.wy - camY - player.size / 2);
+  drawPlayer(psx, psy);
+
+  // Minimap
+  drawMinimap();
+}
+
+// ─── MINIMAP ─────────────────────────────────────────────────────────────────
+function drawMinimap() {
+  const mw = 100, mh = 62;
+  const mx = canvas.width - mw - 8, my = 8;
+  const scX = mw / WORLD_COLS, scY = mh / WORLD_ROWS;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(mx - 1, my - 1, mw + 2, mh + 2);
+
+  for (let ty = 0; ty < WORLD_ROWS; ty++) {
+    for (let tx = 0; tx < WORLD_COLS; tx++) {
+      const t = world[ty][tx].tile;
+      let c = '#3a7a3a';
+      if (t === T.WATER || t === T.WATER_DEEP) c = '#2a4a9a';
+      else if (t === T.SAND) c = '#b8a868';
+      else if (t === T.PATH || t === T.DIRT) c = '#8a7a5a';
+      else if (t === T.STONE || t === T.STONE_DARK) c = '#6a6a6a';
+      else if (t === T.TREE_BASE || t === T.TREE_TOP || t === T.DARK_GRASS) c = '#1a4a1a';
+      else if (PORTALS.find(p => p.id === t)) c = world[ty][tx].portal?.color || '#fff';
+      ctx.fillStyle = c;
+      ctx.fillRect(mx + tx * scX, my + ty * scY, Math.ceil(scX), Math.ceil(scY));
+    }
+  }
+
+  // Viewport rect
+  ctx.strokeStyle = '#ffffff44';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(mx + (camX / TILE) * scX, my + (camY / TILE) * scY,
+                 COLS * scX, ROWS * scY);
+
+  // Player dot
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(mx + (player.wx / TILE) * scX - 1, my + (player.wy / TILE) * scY - 1, 3, 3);
+}
+
+// ─── GAME LOOP ────────────────────────────────────────────────────────────────
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
