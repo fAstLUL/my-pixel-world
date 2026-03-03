@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Games Market</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    user-select: none;
+  }
+  #ui { color: #aaddff; font-size: 11px; letter-spacing: 2px; margin-bottom: 8px; text-transform: uppercase; opacity: 0.7; }
+  #gameCanvas { border: 2px solid #1a3a5a; box-shadow: 0 0 40px #0a2a4a88; image-rendering: pixelated; cursor: none; }
+  #hud { color: #6aafcf; font-size: 10px; letter-spacing: 1px; margin-top: 8px; opacity: 0.5; }
+
+  /* ── OVERLAY BASE ── */
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .overlay.active { display: flex; }
+  .panel {
+    background: #050d14;
+    border: 2px solid;
+    padding: 24px 32px;
+    font-family: 'Courier New', monospace;
+    min-width: 520px;
+    max-width: 600px;
+    position: relative;
+  }
+  .panel h2 { font-size: 13px; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 4px; }
+  .panel .sub { font-size: 10px; letter-spacing: 2px; opacity: 0.5; margin-bottom: 20px; }
+  .close-btn {
+    position: absolute; top: 12px; right: 14px;
+    background: none; border: none; cursor: pointer;
+    font-family: 'Courier New', monospace; font-size: 18px;
+    opacity: 0.5; transition: opacity 0.2s;
+  }
+  .close-btn:hover { opacity: 1; }
+  .px-btn {
+    background: #050d14; border: 1px solid; padding: 9px 20px;
+    font-family: 'Courier New', monospace; font-size: 12px;
+    letter-spacing: 2px; cursor: pointer; text-transform: uppercase;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  /* ── RACING ── */
+  #racingOverlay .panel { border-color: #ff4444; }
+  #racingOverlay h2 { color: #ff4444; }
+  #racingOverlay .close-btn { color: #ff4444; }
+  #racingCanvas { display: block; margin: 0 auto 14px; border: 1px solid #ff444444; image-rendering: pixelated; }
+  #racingHud { display: flex; justify-content: space-between; color: #ff8888; font-size: 11px; letter-spacing: 2px; margin-bottom: 12px; }
+  #racingMsg { color: #ff4444; font-size: 12px; letter-spacing: 2px; text-align: center; height: 18px; margin-bottom: 10px; }
+  #racingOverlay .px-btn { border-color: #ff4444; color: #ff4444; }
+  #racingOverlay .px-btn:hover { background: #ff4444; color: #000; }
+
+  /* ── TYPING ── */
+  #typingOverlay .panel { border-color: #44ff88; min-width: 560px; }
+  #typingOverlay h2 { color: #44ff88; }
+  #typingOverlay .close-btn { color: #44ff88; }
+  #typingPrompt {
+    background: #0a1a0f; border: 1px solid #1a4a2a; padding: 14px 16px;
+    color: #aaffcc; font-size: 13px; line-height: 1.8; letter-spacing: 1px;
+    margin-bottom: 12px; min-height: 70px; word-break: break-word;
+  }
+  #typingPrompt .correct { color: #44ff88; }
+  #typingPrompt .wrong   { color: #ff4444; background: #330000; }
+  #typingPrompt .cursor  { border-left: 2px solid #44ff88; animation: blink 0.7s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  #typingInput {
+    width: 100%; background: #050d0a; border: 1px solid #1a4a2a;
+    color: #44ff88; font-family: 'Courier New', monospace; font-size: 13px;
+    padding: 10px 12px; outline: none; letter-spacing: 1px;
+  }
+  #typingInput:focus { border-color: #44ff88; }
+  #typingStats { display: flex; gap: 30px; color: #44ff88; font-size: 11px; letter-spacing: 2px; margin: 12px 0; }
+  #typingStats span { opacity: 0.6; }
+  #typingStats b { opacity: 1; }
+  #typingOverlay .px-btn { border-color: #44ff88; color: #44ff88; }
+  #typingOverlay .px-btn:hover { background: #44ff88; color: #000; }
+
+  /* ── TRIVIA ── */
+  #triviaOverlay .panel { border-color: #aa44ff; }
+  #triviaOverlay h2 { color: #aa44ff; }
+  #triviaOverlay .close-btn { color: #aa44ff; }
+  #triviaQuestion { color: #ddaaff; font-size: 13px; letter-spacing: 1px; line-height: 1.6; margin-bottom: 18px; min-height: 44px; }
+  #triviaAnswers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .trivia-opt {
+    background: #0a0514; border: 1px solid #3a1a5a; color: #cc99ff;
+    font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 1px;
+    padding: 10px 12px; cursor: pointer; text-align: left;
+    transition: background 0.15s, border-color 0.15s;
+    text-transform: none;
+  }
+  .trivia-opt:hover:not(:disabled) { background: #1a0a2a; border-color: #aa44ff; }
+  .trivia-opt.correct { background: #002200; border-color: #44ff88; color: #44ff88; }
+  .trivia-opt.wrong   { background: #220000; border-color: #ff4444; color: #ff4444; }
+  #triviaFeedback { font-size: 11px; letter-spacing: 2px; height: 18px; margin-bottom: 10px; }
+  #triviaScore { color: #aa44ff; font-size: 11px; letter-spacing: 2px; opacity: 0.7; }
+  #triviaOverlay .px-btn { border-color: #aa44ff; color: #aa44ff; }
+  #triviaOverlay .px-btn:hover { background: #aa44ff; color: #000; }
+</style>
+</head>
+<body>
+
+<div id="ui">🏪 GAMES MARKET 🏪</div>
+<canvas id="gameCanvas" width="640" height="400"></canvas>
+<div id="hud">WASD / ARROWS TO MOVE &nbsp;|&nbsp; E / ENTER TO ENTER STALL &nbsp;|&nbsp; ESC TO RETURN</div>
+
+<!-- ══ RACING OVERLAY ══ -->
+<div id="racingOverlay" class="overlay">
+  <div class="panel">
+    <h2>🏎 PIXEL RACER</h2>
+    <p class="sub">DODGE TRAFFIC — ARROW KEYS / A D TO STEER</p>
+    <button class="close-btn" onclick="closeOverlay('racingOverlay')">✕</button>
+    <div id="racingHud"><span>SCORE: <b id="rScore">0</b></span><span>SPEED: <b id="rSpeed">1</b>x</span><span>BEST: <b id="rBest">0</b></span></div>
+    <canvas id="racingCanvas" width="280" height="200"></canvas>
+    <div id="racingMsg"></div>
+    <div style="text-align:center"><button class="px-btn" onclick="startRacing()">▶ START / RESTART</button></div>
+  </div>
+</div>
+
+<!-- ══ TYPING OVERLAY ══ -->
+<div id="typingOverlay" class="overlay">
+  <div class="panel">
+    <h2>⌨ TYPING TEST</h2>
+    <p class="sub">TYPE THE TEXT AS FAST AS YOU CAN</p>
+    <button class="close-btn" onclick="closeOverlay('typingOverlay')">✕</button>
+    <div id="typingPrompt"></div>
+    <input id="typingInput" type="text" autocomplete="off" spellcheck="false" placeholder="START TYPING..." />
+    <div id="typingStats">
+      <span>WPM: <b id="tWpm">—</b></span>
+      <span>ACC: <b id="tAcc">—</b></span>
+      <span>TIME: <b id="tTime">—</b></span>
+    </div>
+    <button class="px-btn" onclick="startTyping()">▶ NEW TEST</button>
+  </div>
+</div>
+
+<!-- ══ TRIVIA OVERLAY ══ -->
+<div id="triviaOverlay" class="overlay">
+  <div class="panel">
+    <h2>🧠 TRIVIA CHALLENGE</h2>
+    <p class="sub">10 QUESTIONS — HOW MANY CAN YOU GET?</p>
+    <button class="close-btn" onclick="closeOverlay('triviaOverlay')">✕</button>
+    <div id="triviaQuestion"></div>
+    <div id="triviaAnswers"></div>
+    <div id="triviaFeedback"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span id="triviaScore">SCORE: 0 / 10</span>
+      <button class="px-btn" onclick="nextTrivia()">NEXT →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  MARKET WORLD
+// ══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const TILE = 16;
+const COLS = Math.floor(canvas.width / TILE);   // 40
+const ROWS = Math.floor(canvas.height / TILE);  // 25
+const W = 48, H = 30; // world size
+
+// Tile IDs
+const T = { STONE:0, COBBLE:1, COBBLE2:2, WALL:3, ROOF:4, DOOR:5, COUNTER:6, GRASS:7, FENCE:8, BANNER_R:9, BANNER_B:10, BANNER_P:11, SIGN:12, FLOWER:13, TORCH:14 };
+
+const COLORS = {
+  [T.STONE]:    ['#5a5a6a','#4a4a5a','#6a6a7a'],
+  [T.COBBLE]:   ['#7a7a6a','#6a6a5a','#8a8a7a'],
+  [T.COBBLE2]:  ['#6a6a5a','#5a5a4a','#7a7a6a'],
+  [T.WALL]:     ['#8a7a6a','#7a6a5a','#9a8a7a'],
+  [T.ROOF]:     ['#4a3a6a','#3a2a5a','#5a4a7a'],
+  [T.DOOR]:     ['#5a3a1a','#4a2a0a','#6a4a2a'],
+  [T.COUNTER]:  ['#7a5a3a','#6a4a2a','#8a6a4a'],
+  [T.GRASS]:    ['#3a6a3a','#2a5a2a','#4a7a4a'],
+  [T.FENCE]:    ['#9a8a6a','#8a7a5a','#aaa070'],
+  [T.SIGN]:     ['#8a6a3a','#7a5a2a','#9a7a4a'],
+  [T.FLOWER]:   ['#3a6a3a','#dd4466','#3a6a3a'],
+  [T.TORCH]:    ['#8a6a2a','#ffa020','#8a6a2a'],
+};
+
+// ── World map ──
+// Build a hand-crafted market layout
+const world = [];
+for (let y = 0; y < H; y++) {
+  world[y] = [];
+  for (let x = 0; x < W; x++) {
+    let t = T.COBBLE;
+    if ((x + y) % 3 === 0) t = T.COBBLE2;
+    world[y][x] = { tile: t, walkable: true, stall: null };
+  }
+}
+
+// Grass border
+for (let y = 0; y < H; y++)
+  for (let x = 0; x < W; x++)
+    if (x < 2 || x >= W-2 || y < 2 || y >= H-2)
+      world[y][x] = { tile: T.GRASS, walkable: false, stall: null };
+
+// ── Stall builder ──
+function buildStall(sx, sy, color, stallId) {
+  // Back wall
+  for (let x = sx; x < sx+7; x++) {
+    world[sy][x]   = { tile: T.WALL, walkable: false, stall: null };
+    world[sy+1][x] = { tile: T.WALL, walkable: false, stall: null };
+  }
+  // Roof row
+  for (let x = sx-1; x < sx+8; x++)
+    if (world[sy-1] && world[sy-1][x])
+      world[sy-1][x] = { tile: T.ROOF, walkable: false, stall: null };
+  // Counter (front of stall)
+  for (let x = sx; x < sx+7; x++)
+    world[sy+2][x] = { tile: T.COUNTER, walkable: false, stall: stallId };
+  // Interaction tiles in front of counter
+  for (let x = sx; x < sx+7; x++)
+    if (world[sy+3] && world[sy+3][x])
+      world[sy+3][x].stall = stallId;
+  // Torches
+  if (world[sy-1][sx])   world[sy-1][sx]   = { tile: T.TORCH, walkable: false, stall: null };
+  if (world[sy-1][sx+6]) world[sy-1][sx+6] = { tile: T.TORCH, walkable: false, stall: null };
+}
+
+// Three stalls across the top half
+buildStall(4,  5, '#ff4444', 'racing');
+buildStall(20, 5, '#44ff88', 'typing');
+buildStall(36, 5, '#aa44ff', 'trivia');
+
+// Decorative flowers and fences
+const flowerSpots = [[3,12],[3,13],[8,14],[15,12],[15,13],[24,14],[31,12],[31,13],[38,14],[44,12],[44,13]];
+flowerSpots.forEach(([x,y]) => { if (world[y] && world[y][x]) world[y][x] = { tile: T.FLOWER, walkable: false, stall: null }; });
+
+// Central fountain (decorative, unwalkable)
+const cx = 23, cy = 16;
+for (let dy = -2; dy <= 2; dy++)
+  for (let dx = -2; dx <= 2; dx++)
+    if (Math.abs(dx) + Math.abs(dy) <= 3)
+      world[cy+dy][cx+dx] = { tile: T.STONE, walkable: dx === 0 && dy === 0, stall: null };
+
+// ── Stall metadata ──
+const STALLS = {
+  racing: { label: 'PIXEL RACER',   color: '#ff4444', glow: '#ff0000', sign: '🏎', x: 7,  y: 6 },
+  typing: { label: 'TYPING TEST',   color: '#44ff88', glow: '#00ff44', sign: '⌨',  x: 23, y: 6 },
+  trivia: { label: 'TRIVIA',        color: '#aa44ff', glow: '#8800ff', sign: '🧠', x: 39, y: 6 },
+};
+
+// ── Player ──
+const player = { wx: 23 * TILE + 8, wy: 22 * TILE + 8, speed: 1.5, size: 10, facing: 0, animFrame: 0, animTimer: 0, moving: false };
+let camX = 0, camY = 0, tick = 0;
+
+// ── Input ──
+const keys = {};
+window.addEventListener('keydown', e => {
+  if (document.querySelector('.overlay.active')) {
+    if (e.key === 'Escape') document.querySelectorAll('.overlay.active').forEach(o => o.classList.remove('active'));
+    return;
+  }
+  if (e.key === 'Escape') { window.history.back(); return; }
+  keys[e.key] = true;
+  e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// ── Notification ──
+let notifTimer = 0;
+function showNotif(text, color = '#aaddff') {
+  // draw on canvas directly via a flag
+  window._notif = { text, color, timer: 150 };
+}
+
+// ── Update ──
+function update() {
+  tick++;
+  if (document.querySelector('.overlay.active')) return;
+
+  let dx = 0, dy = 0;
+  if (keys['ArrowLeft']  || keys['a'] || keys['A']) dx -= 1;
+  if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
+  if (keys['ArrowUp']    || keys['w'] || keys['W']) dy -= 1;
+  if (keys['ArrowDown']  || keys['s'] || keys['S']) dy += 1;
+  if (dx && dy) { dx *= 0.707; dy *= 0.707; }
+
+  player.moving = dx !== 0 || dy !== 0;
+  if (dx < 0) player.facing = 2; else if (dx > 0) player.facing = 3;
+  else if (dy < 0) player.facing = 1; else if (dy > 0) player.facing = 0;
+  if (player.moving) { player.animTimer++; if (player.animTimer > 8) { player.animFrame = (player.animFrame+1)%4; player.animTimer=0; } }
+  else player.animFrame = 0;
+
+  const checkW = (px, py) => {
+    const tx = Math.floor(px/TILE), ty = Math.floor(py/TILE);
+    if (tx<0||ty<0||tx>=W||ty>=H) return false;
+    return world[ty][tx].walkable;
+  };
+  const nx = player.wx + dx*player.speed, ny = player.wy + dy*player.speed;
+  const r = player.size/2 - 1;
+  if (checkW(nx+r,player.wy) && checkW(nx-r,player.wy)) player.wx = nx;
+  if (checkW(player.wx,ny+r) && checkW(player.wx,ny-r)) player.wy = ny;
+  player.wx = Math.max(TILE, Math.min(W*TILE-TILE, player.wx));
+  player.wy = Math.max(TILE, Math.min(H*TILE-TILE, player.wy));
+
+  camX = Math.max(0, Math.min(W*TILE - canvas.width,  player.wx - canvas.width/2));
+  camY = Math.max(0, Math.min(H*TILE - canvas.height, player.wy - canvas.height/2));
+
+  // Stall interaction
+  if (keys['Enter'] || keys['e'] || keys['E']) {
+    const tx = Math.floor(player.wx/TILE), ty = Math.floor(player.wy/TILE);
+    const cell = world[ty] && world[ty][tx];
+    if (cell && cell.stall) {
+      openStall(cell.stall);
+      keys['Enter'] = false; keys['e'] = false; keys['E'] = false;
+    }
+  }
+
+  if (window._notif && window._notif.timer > 0) window._notif.timer--;
+}
+
+function openStall(id) {
+  if (id === 'racing') { openOverlay('racingOverlay'); }
+  else if (id === 'typing') { openOverlay('typingOverlay'); startTyping(); }
+  else if (id === 'trivia') { openOverlay('triviaOverlay'); startTrivia(); }
+}
+
+function openOverlay(id) { document.getElementById(id).classList.add('active'); }
+function closeOverlay(id) { document.getElementById(id).classList.remove('active'); }
+
+// ── Draw tile ──
+function drawTile(tile, sx, sy) {
+  const c = COLORS[tile];
+  if (!c) { ctx.fillStyle = '#222'; ctx.fillRect(sx,sy,TILE,TILE); return; }
+  ctx.fillStyle = c[0]; ctx.fillRect(sx,sy,TILE,TILE);
+  ctx.fillStyle = c[1]; ctx.fillRect(sx,sy,TILE,1); ctx.fillRect(sx,sy,1,TILE);
+  ctx.fillStyle = c[2]; ctx.fillRect(sx+TILE-1,sy,1,TILE); ctx.fillRect(sx,sy+TILE-1,TILE,1);
+
+  if (tile === T.TORCH) {
+    ctx.fillStyle = '#ffa020'; ctx.fillRect(sx+6,sy+2,4,4);
+    ctx.fillStyle = '#ffdd00'; ctx.fillRect(sx+7,sy+1,2,2);
+    if (Math.floor(tick/6)%2===0) { ctx.fillStyle = '#ff600044'; ctx.fillRect(sx+4,sy,8,6); }
+  }
+  if (tile === T.FLOWER) {
+    ctx.fillStyle = '#3a6a3a'; ctx.fillRect(sx,sy,TILE,TILE);
+    ctx.fillStyle = '#dd4466'; ctx.fillRect(sx+5,sy+4,5,5);
+    ctx.fillStyle = '#ffaabb'; ctx.fillRect(sx+6,sy+5,3,3);
+    ctx.fillStyle = '#2a5a2a'; ctx.fillRect(sx+7,sy+8,2,5);
+  }
+}
+
+// ── Draw stall label ──
+function drawStallLabel(stall, worldX, worldY) {
+  const sx = worldX * TILE - camX + TILE/2;
+  const sy = worldY * TILE - camY;
+  const px = player.wx - camX, py = player.wy - camY;
+  const dist = Math.hypot(sx - px, sy - py);
+  if (dist > 100) return;
+  const alpha = Math.max(0, 1 - dist/100);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const pulse = Math.sin(tick * 0.06) * 0.3 + 0.7;
+  ctx.shadowBlur = 10 * pulse;
+  ctx.shadowColor = stall.glow;
+
+  // Sign board
+  const tw = stall.label.length * 7 + 16;
+  ctx.fillStyle = '#050d14cc';
+  ctx.fillRect(sx - tw/2, sy - 36, tw, 18);
+  ctx.strokeStyle = stall.color;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(sx - tw/2, sy - 36, tw, 18);
+  ctx.fillStyle = stall.color;
+  ctx.font = '9px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText(`[ ${stall.label} ]`, sx, sy - 23);
+
+  ctx.fillStyle = '#aaaaaa';
+  ctx.font = '8px Courier New';
+  ctx.fillText('PRESS E TO ENTER', sx, sy - 8);
+  ctx.restore();
+}
+
+// ── Draw player ──
+function drawPlayer(sx, sy) {
+  const bob = player.moving ? Math.sin(tick*0.3)*1 : 0;
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(sx-3, sy+8, 10, 3);
+  ctx.fillStyle = '#2255cc'; ctx.fillRect(sx-3, sy-2+bob, 10, 8);
+  ctx.fillStyle = '#f4c88a'; ctx.fillRect(sx-2, sy-8+bob, 8, 7);
+  ctx.fillStyle = '#000';
+  if (player.facing===0) { ctx.fillRect(sx,sy-5+bob,2,2); ctx.fillRect(sx+3,sy-5+bob,2,2); }
+  else if (player.facing===1) { ctx.fillStyle='#d4a87a'; ctx.fillRect(sx-1,sy-7+bob,6,3); }
+  else if (player.facing===2) { ctx.fillRect(sx,sy-5+bob,2,2); }
+  else { ctx.fillRect(sx+1,sy-5+bob,2,2); }
+  ctx.fillStyle='#334477';
+  if (player.moving) {
+    const lo=[0,2,0,-2][player.animFrame];
+    ctx.fillRect(sx-2,sy+6+bob,4, 4+(lo>0?lo:0));
+    ctx.fillRect(sx+2,sy+6+bob,4, 4-(lo>0?0:lo));
+  } else {
+    ctx.fillRect(sx-2,sy+6,4,4); ctx.fillRect(sx+2,sy+6,4,4);
+  }
+  ctx.fillStyle='#222'; ctx.fillRect(sx-3,sy+9+bob,5,2); ctx.fillRect(sx+2,sy+9+bob,5,2);
+}
+
+// ── Draw ──
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const sx0 = Math.max(0, Math.floor(camX/TILE));
+  const ex  = Math.min(W, sx0 + COLS + 2);
+  const sy0 = Math.max(0, Math.floor(camY/TILE));
+  const ey  = Math.min(H, sy0 + ROWS + 2);
+
+  for (let ty = sy0; ty < ey; ty++)
+    for (let tx = sx0; tx < ex; tx++)
+      drawTile(world[ty][tx].tile, tx*TILE-camX, ty*TILE-camY);
+
+  // Draw stall labels
+  Object.entries(STALLS).forEach(([id, stall]) => drawStallLabel(stall, stall.x, stall.y));
+
+  drawPlayer(Math.round(player.wx-camX-player.size/2), Math.round(player.wy-camY-player.size/2));
+
+  // Notification
+  if (window._notif && window._notif.timer > 0) {
+    const n = window._notif;
+    const a = Math.min(1, n.timer / 30);
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle='#000a'; ctx.fillRect(canvas.width/2-120, 8, 240, 22);
+    ctx.fillStyle = n.color; ctx.font='10px Courier New'; ctx.textAlign='center';
+    ctx.fillText(n.text, canvas.width/2, 23);
+    ctx.restore();
+  }
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+
+
+// ══════════════════════════════════════════════════════════════
+//  MINI GAME 1: PIXEL RACER
+// ══════════════════════════════════════════════════════════════
+const rc = document.getElementById('racingCanvas');
+const rctx = rc.getContext('2d');
+rctx.imageSmoothingEnabled = false;
+
+let rState = 'idle'; // idle | playing | dead
+let rScore = 0, rBest = 0, rSpeed = 1, rTick = 0;
+let rPlayerX = 140; // center of 280px canvas
+const LANE_W = 40, ROAD_L = 60, ROAD_R = 220;
+let rCars = []; // {x, y, color}
+let rLines = []; // road dividers y positions
+let rKeys = {};
+
+document.addEventListener('keydown', e => {
+  if (document.getElementById('racingOverlay').classList.contains('active'))
+    rKeys[e.key] = true;
+});
+document.addEventListener('keyup', e => { rKeys[e.key] = false; });
+
+function startRacing() {
+  rState = 'playing'; rScore = 0; rSpeed = 1; rTick = 0;
+  rPlayerX = 140;
+  rCars = [{ x: 100, y: -30, color: '#ff4444' }, { x: 170, y: -100, color: '#44aaff' }];
+  rLines = [0, 50, 100, 150, 200];
+  document.getElementById('racingMsg').textContent = '';
+  requestAnimationFrame(racingLoop);
+}
+
+function racingLoop() {
+  if (!document.getElementById('racingOverlay').classList.contains('active')) return;
+  if (rState !== 'playing') return;
+
+  rTick++;
+  rSpeed = 1 + Math.floor(rTick / 200) * 0.5;
+  rScore++;
+
+  // Move player
+  if (rKeys['ArrowLeft'] || rKeys['a'] || rKeys['A']) rPlayerX -= 2.5;
+  if (rKeys['ArrowRight']|| rKeys['d'] || rKeys['D']) rPlayerX += 2.5;
+  rPlayerX = Math.max(ROAD_L + 4, Math.min(ROAD_R - 14, rPlayerX));
+
+  // Move road lines
+  rLines = rLines.map(y => y + rSpeed * 3);
+  if (rLines[rLines.length-1] > 250) rLines.unshift(-20);
+  rLines = rLines.filter(y => y < 220);
+
+  // Move opponent cars
+  rCars.forEach(c => {
+    c.y += rSpeed * 2.5;
+    if (c.y > 220) {
+      c.y = -40 - Math.random() * 80;
+      c.x = ROAD_L + 10 + Math.random() * (ROAD_R - ROAD_L - 30);
+    }
+    // Collision
+    if (Math.abs(c.x - rPlayerX) < 18 && Math.abs(c.y - 170) < 24) {
+      rState = 'dead';
+      if (rScore > rBest) rBest = rScore;
+      document.getElementById('rBest').textContent = rBest;
+      document.getElementById('racingMsg').textContent = '💥 CRASHED! RESTART TO PLAY AGAIN';
+    }
+  });
+
+  document.getElementById('rScore').textContent = rScore;
+  document.getElementById('rSpeed').textContent = rSpeed.toFixed(1);
+
+  // Draw
+  rctx.fillStyle = '#1a1a2a'; rctx.fillRect(0,0,280,200);
+  // Grass
+  rctx.fillStyle = '#2a4a1a'; rctx.fillRect(0,0,ROAD_L,200); rctx.fillRect(ROAD_R,0,280-ROAD_R,200);
+  // Road
+  rctx.fillStyle = '#3a3a4a'; rctx.fillRect(ROAD_L,0,ROAD_R-ROAD_L,200);
+  rctx.fillStyle = '#5a5a3a';
+  rLines.forEach(y => rctx.fillRect(ROAD_L + (ROAD_R-ROAD_L)/2 - 2, y, 4, 20));
+  // Road edges
+  rctx.fillStyle = '#ffffff44'; rctx.fillRect(ROAD_L,0,2,200); rctx.fillRect(ROAD_R-2,0,2,200);
+  // Opponent cars
+  rCars.forEach(c => {
+    rctx.fillStyle = c.color; rctx.fillRect(c.x-6,c.y,14,22);
+    rctx.fillStyle='#000'; rctx.fillRect(c.x-5,c.y+2,4,5); rctx.fillRect(c.x+3,c.y+2,4,5);
+    rctx.fillRect(c.x-5,c.y+14,4,5); rctx.fillRect(c.x+3,c.y+14,4,5);
+  });
+  // Player car
+  rctx.fillStyle='#88ddff'; rctx.fillRect(rPlayerX-6,165,14,22);
+  rctx.fillStyle='#000'; rctx.fillRect(rPlayerX-5,167,4,5); rctx.fillRect(rPlayerX+3,167,4,5);
+  rctx.fillRect(rPlayerX-5,180,4,5); rctx.fillRect(rPlayerX+3,180,4,5);
+
+  if (rState === 'playing') requestAnimationFrame(racingLoop);
+}
+
+
+// ══════════════════════════════════════════════════════════════
+//  MINI GAME 2: TYPING TEST
+// ══════════════════════════════════════════════════════════════
+const TYPING_TEXTS = [
+  "the quick brown fox jumps over the lazy dog near the riverbank",
+  "pixel worlds are built one tile at a time with patience and code",
+  "every great website starts with a single line of html on a blank page",
+  "practice makes perfect when it comes to typing fast and accurately",
+  "the stars above the cobblestone market glow like ancient torches",
+  "keyboards were invented to turn thoughts into words at the speed of light",
+];
+
+let tText = '', tTyped = 0, tErrors = 0, tStartTime = null, tDone = false, tTimer = null;
+
+function startTyping() {
+  clearInterval(tTimer);
+  tText = TYPING_TEXTS[Math.floor(Math.random() * TYPING_TEXTS.length)];
+  tTyped = 0; tErrors = 0; tStartTime = null; tDone = false;
+  document.getElementById('typingInput').value = '';
+  document.getElementById('typingInput').disabled = false;
+  document.getElementById('typingInput').focus();
+  document.getElementById('tWpm').textContent = '—';
+  document.getElementById('tAcc').textContent = '—';
+  document.getElementById('tTime').textContent = '—';
+  renderTypingPrompt(0);
+}
+
+function renderTypingPrompt(pos) {
+  const el = document.getElementById('typingPrompt');
+  let html = '';
+  for (let i = 0; i < tText.length; i++) {
+    const ch = tText[i] === ' ' ? '&nbsp;' : tText[i];
+    if (i < pos) {
+      const typed = document.getElementById('typingInput').value[i];
+      html += `<span class="${typed === tText[i] ? 'correct' : 'wrong'}">${ch}</span>`;
+    } else if (i === pos) {
+      html += `<span class="cursor">${ch}</span>`;
+    } else {
+      html += `<span style="opacity:0.35">${ch}</span>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+document.getElementById('typingInput').addEventListener('input', function() {
+  if (tDone) return;
+  if (!tStartTime) { tStartTime = Date.now(); tTimer = setInterval(updateTypingTime, 200); }
+  const val = this.value;
+  tTyped = val.length;
+  tErrors = 0;
+  for (let i = 0; i < val.length; i++) if (val[i] !== tText[i]) tErrors++;
+  renderTypingPrompt(tTyped);
+  if (val === tText) finishTyping();
+});
+
+function updateTypingTime() {
+  if (!tStartTime || tDone) return;
+  const elapsed = (Date.now() - tStartTime) / 1000;
+  document.getElementById('tTime').textContent = elapsed.toFixed(1) + 's';
+  const words = tTyped / 5;
+  document.getElementById('tWpm').textContent = Math.round(words / (elapsed / 60));
+}
+
+function finishTyping() {
+  tDone = true; clearInterval(tTimer);
+  document.getElementById('typingInput').disabled = true;
+  const elapsed = (Date.now() - tStartTime) / 1000;
+  const wpm = Math.round((tText.length / 5) / (elapsed / 60));
+  const acc = Math.round(((tText.length - tErrors) / tText.length) * 100);
+  document.getElementById('tWpm').textContent = wpm;
+  document.getElementById('tAcc').textContent = acc + '%';
+  document.getElementById('tTime').textContent = elapsed.toFixed(1) + 's';
+}
+
+
+// ══════════════════════════════════════════════════════════════
+//  MINI GAME 3: TRIVIA
+// ══════════════════════════════════════════════════════════════
+const TRIVIA_BANK = [
+  { q: "What does HTML stand for?", a: ["HyperText Markup Language","HighText Machine Language","Hyperlink Text Markup Language","HyperType Markup Link"], correct: 0 },
+  { q: "Which planet is closest to the Sun?", a: ["Venus","Earth","Mercury","Mars"], correct: 2 },
+  { q: "What is the speed of light (approx)?", a: ["150,000 km/s","300,000 km/s","450,000 km/s","600,000 km/s"], correct: 1 },
+  { q: "What programming language runs in the browser natively?", a: ["Python","Java","JavaScript","Ruby"], correct: 2 },
+  { q: "How many sides does a hexagon have?", a: ["5","7","8","6"], correct: 3 },
+  { q: "What does CSS stand for?", a: ["Creative Style Sheets","Cascading Style Sheets","Computer Style Syntax","Color Style Sheets"], correct: 1 },
+  { q: "Which ocean is the largest?", a: ["Atlantic","Indian","Arctic","Pacific"], correct: 3 },
+  { q: "What is 2 to the power of 10?", a: ["512","2048","1024","256"], correct: 2 },
+  { q: "Who wrote 'Romeo and Juliet'?", a: ["Charles Dickens","William Shakespeare","Jane Austen","Mark Twain"], correct: 1 },
+  { q: "What gas do plants absorb from the atmosphere?", a: ["Oxygen","Nitrogen","Carbon Dioxide","Hydrogen"], correct: 2 },
+  { q: "What does GPU stand for?", a: ["General Processing Unit","Graphics Processing Unit","Global Power Unit","Grid Processor Utility"], correct: 1 },
+  { q: "What year did the World Wide Web launch publicly?", a: ["1985","1991","1999","2001"], correct: 1 },
+];
+
+let tqQueue = [], tqIndex = 0, tqScore = 0, tqAnswered = false;
+
+function startTrivia() {
+  tqQueue = [...TRIVIA_BANK].sort(() => Math.random() - 0.5).slice(0, 10);
+  tqIndex = 0; tqScore = 0; tqAnswered = false;
+  document.getElementById('triviaScore').textContent = 'SCORE: 0 / 10';
+  showTriviaQuestion();
+}
+
+function showTriviaQuestion() {
+  tqAnswered = false;
+  document.getElementById('triviaFeedback').textContent = '';
+  document.getElementById('triviaFeedback').style.color = '';
+  const q = tqQueue[tqIndex];
+  document.getElementById('triviaQuestion').textContent = `Q${tqIndex+1}: ${q.q}`;
+  const container = document.getElementById('triviaAnswers');
+  container.innerHTML = '';
+  q.a.forEach((ans, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'trivia-opt';
+    btn.textContent = `${['A','B','C','D'][i]}) ${ans}`;
+    btn.onclick = () => answerTrivia(i, btn, q.correct);
+    container.appendChild(btn);
+  });
+}
+
+function answerTrivia(chosen, btn, correct) {
+  if (tqAnswered) return;
+  tqAnswered = true;
+  const btns = document.querySelectorAll('.trivia-opt');
+  btns.forEach(b => b.disabled = true);
+  btns[correct].classList.add('correct');
+  const fb = document.getElementById('triviaFeedback');
+  if (chosen === correct) {
+    tqScore++;
+    btn.classList.add('correct');
+    fb.textContent = '✔ CORRECT!'; fb.style.color = '#44ff88';
+  } else {
+    btn.classList.add('wrong');
+    fb.textContent = '✖ WRONG!'; fb.style.color = '#ff4444';
+  }
+  document.getElementById('triviaScore').textContent = `SCORE: ${tqScore} / ${Math.min(tqIndex+1,10)}`;
+}
+
+function nextTrivia() {
+  if (!tqAnswered && tqIndex < tqQueue.length) { return; }
+  tqIndex++;
+  if (tqIndex >= tqQueue.length) {
+    document.getElementById('triviaQuestion').textContent = `GAME OVER! Final score: ${tqScore} / 10`;
+    document.getElementById('triviaAnswers').innerHTML = '';
+    document.getElementById('triviaFeedback').textContent = tqScore >= 8 ? '🏆 EXCELLENT!' : tqScore >= 5 ? '👍 GOOD EFFORT' : '📚 KEEP STUDYING!';
+    document.getElementById('triviaFeedback').style.color = '#aa44ff';
+    document.getElementById('triviaScore').textContent = `FINAL: ${tqScore} / 10`;
+  } else {
+    showTriviaQuestion();
+  }
+}
+</script>
+</body>
+</html>
