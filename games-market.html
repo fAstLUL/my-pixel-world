@@ -6,13 +6,13 @@
 <title>Games Market</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; }
   body {
     background: #0a0a0f;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100vh;
     font-family: 'Courier New', monospace;
     overflow: hidden;
     user-select: none;
@@ -71,6 +71,25 @@
   #typingOverlay .panel { border-color: #44ff88; min-width: 560px; }
   #typingOverlay h2 { color: #44ff88; }
   #typingOverlay .close-btn { color: #44ff88; }
+
+  /* Mode select screen */
+  #typingModeSelect { text-align: center; padding: 10px 0 6px; }
+  #typingModeSelect p { color: #44ff88; font-size: 10px; letter-spacing: 2px; opacity: 0.6; margin-bottom: 22px; }
+  .mode-btn {
+    display: inline-block; width: 180px; padding: 18px 10px;
+    background: #050d0a; border: 2px solid #1a4a2a; color: #44ff88;
+    font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 3px;
+    cursor: pointer; text-transform: uppercase; transition: all 0.15s; margin: 0 10px;
+  }
+  .mode-btn .mode-icon { font-size: 26px; display: block; margin-bottom: 8px; }
+  .mode-btn .mode-desc { display: block; font-size: 9px; opacity: 0.5; letter-spacing: 1px; margin-top: 6px; }
+  .mode-btn:hover { background: #0a2a14; border-color: #44ff88; box-shadow: 0 0 14px #44ff8844; }
+
+  /* Shared typing area */
+  #typingGameArea { display: none; }
+  #typingModeLabel { font-size: 9px; letter-spacing: 3px; color: #44ff88; opacity: 0.4; margin-bottom: 10px; text-transform: uppercase; }
+
+  /* Casual prompt */
   #typingPrompt {
     background: #0a1a0f; border: 1px solid #1a4a2a; padding: 14px 16px;
     color: #aaffcc; font-size: 13px; line-height: 1.8; letter-spacing: 1px;
@@ -80,6 +99,45 @@
   #typingPrompt .wrong   { color: #ff4444; background: #330000; }
   #typingPrompt .cursor  { border-left: 2px solid #44ff88; animation: blink 0.7s infinite; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* Competitive word display */
+  #compWordDisplay {
+    background: #0a1a0f; border: 1px solid #1a4a2a;
+    padding: 14px 16px; margin-bottom: 12px;
+    display: none; overflow: hidden;
+  }
+  #compWordRibbon {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    min-height: 36px;
+  }
+  .comp-word {
+    font-size: 17px; letter-spacing: 2px; color: #44ff88aa;
+    font-family: 'Courier New', monospace; transition: opacity 0.15s;
+  }
+  .comp-word.active {
+    color: #44ff88; font-size: 20px; letter-spacing: 3px;
+    border-bottom: 2px solid #44ff88; padding-bottom: 2px;
+  }
+  .comp-word.wrong-flash { color: #ff4444; border-bottom-color: #ff4444; }
+  #compWordStatus { font-size: 10px; letter-spacing: 2px; color: #ff4444; height: 14px; margin-top: 8px; }
+  #compCountdown {
+    font-size: 28px; color: #44ff88; letter-spacing: 4px;
+    text-align: center; margin-bottom: 10px; display: none;
+  }
+  #compCountdown.urgent { color: #ff4444; animation: pulse 0.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* Time selector */
+  #compTimeSelect { display: none; text-align: center; margin-bottom: 16px; }
+  #compTimeSelect span { color: #44ff88; font-size: 10px; letter-spacing: 2px; opacity: 0.6; display: block; margin-bottom: 10px; }
+  .time-btn {
+    background: #050d0a; border: 1px solid #1a4a2a; color: #44ff88;
+    font-family: 'Courier New', monospace; font-size: 12px; letter-spacing: 2px;
+    padding: 8px 18px; cursor: pointer; margin: 0 5px; transition: all 0.15s;
+  }
+  .time-btn:hover, .time-btn.selected { background: #0a2a14; border-color: #44ff88; }
+
+  /* Shared input */
   #typingInput {
     width: 100%; background: #050d0a; border: 1px solid #1a4a2a;
     color: #44ff88; font-family: 'Courier New', monospace; font-size: 13px;
@@ -89,6 +147,7 @@
   #typingStats { display: flex; gap: 30px; color: #44ff88; font-size: 11px; letter-spacing: 2px; margin: 12px 0; }
   #typingStats span { opacity: 0.6; }
   #typingStats b { opacity: 1; }
+  .typing-btns { display: flex; gap: 10px; align-items: center; }
   #typingOverlay .px-btn { border-color: #44ff88; color: #44ff88; }
   #typingOverlay .px-btn:hover { background: #44ff88; color: #000; }
 
@@ -117,7 +176,7 @@
 <body>
 
 <div id="ui">🏪 GAMES MARKET 🏪</div>
-<canvas id="gameCanvas" width="640" height="400"></canvas>
+<canvas id="gameCanvas" width="960" height="600"></canvas>
 <div id="hud">WASD / ARROWS TO MOVE &nbsp;|&nbsp; E / ENTER TO ENTER STALL &nbsp;|&nbsp; ESC TO RETURN</div>
 
 <!-- ══ RACING OVERLAY ══ -->
@@ -137,16 +196,58 @@
 <div id="typingOverlay" class="overlay">
   <div class="panel">
     <h2>⌨ TYPING TEST</h2>
-    <p class="sub">TYPE THE TEXT AS FAST AS YOU CAN</p>
     <button class="close-btn" onclick="closeOverlay('typingOverlay')">✕</button>
-    <div id="typingPrompt"></div>
-    <input id="typingInput" type="text" autocomplete="off" spellcheck="false" placeholder="START TYPING..." />
-    <div id="typingStats">
-      <span>WPM: <b id="tWpm">—</b></span>
-      <span>ACC: <b id="tAcc">—</b></span>
-      <span>TIME: <b id="tTime">—</b></span>
+
+    <!-- MODE SELECT -->
+    <div id="typingModeSelect">
+      <p>SELECT YOUR MODE</p>
+      <button class="mode-btn" onclick="selectTypingMode('casual')">
+        <span class="mode-icon">🎬</span>
+        CASUAL
+        <span class="mode-desc">Famous quotes from movies,<br>anime & shows</span>
+      </button>
+      <button class="mode-btn" onclick="selectTypingMode('competitive')">
+        <span class="mode-icon">⚡</span>
+        COMPETITIVE
+        <span class="mode-desc">Timed word sprint —<br>how fast are you?</span>
+      </button>
     </div>
-    <button class="px-btn" onclick="startTyping()">▶ NEW TEST</button>
+
+    <!-- GAME AREA (shared) -->
+    <div id="typingGameArea">
+      <div id="typingModeLabel"></div>
+
+      <!-- Competitive: time selector -->
+      <div id="compTimeSelect">
+        <span>SELECT DURATION</span>
+        <button class="time-btn selected" onclick="setCompTime(15, this)">15s</button>
+        <button class="time-btn" onclick="setCompTime(30, this)">30s</button>
+        <button class="time-btn" onclick="setCompTime(60, this)">60s</button>
+      </div>
+
+      <!-- Competitive: countdown + word -->
+      <div id="compCountdown"></div>
+      <div id="compWordDisplay">
+        <div id="compWordRibbon"></div>
+        <div id="compWordStatus"></div>
+      </div>
+
+      <!-- Casual: full quote prompt -->
+      <div id="typingPrompt"></div>
+
+      <input id="typingInput" type="text" autocomplete="off" spellcheck="false" placeholder="START TYPING..." />
+
+      <div id="typingStats">
+        <span>WPM: <b id="tWpm">—</b></span>
+        <span>ACC: <b id="tAcc">—</b></span>
+        <span>TIME: <b id="tTime">—</b></span>
+      </div>
+      <div class="typing-btns">
+        <button class="px-btn" onclick="restartTyping()">↺ RESTART</button>
+        <button class="px-btn" onclick="backToModeSelect()" style="opacity:0.5">← MODES</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -175,9 +276,9 @@ const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
 const TILE = 16;
-const COLS = Math.floor(canvas.width / TILE);   // 40
-const ROWS = Math.floor(canvas.height / TILE);  // 25
-const W = 48, H = 30; // world size
+const COLS = Math.floor(canvas.width / TILE);   // 60
+const ROWS = Math.floor(canvas.height / TILE);  // 37
+const W = 62, H = 39; // world size — covers full 960x600 canvas
 
 // Tile IDs
 const T = { STONE:0, COBBLE:1, COBBLE2:2, WALL:3, ROOF:4, DOOR:5, COUNTER:6, GRASS:7, FENCE:8, BANNER_R:9, BANNER_B:10, BANNER_P:11, SIGN:12, FLOWER:13, TORCH:14 };
@@ -198,7 +299,6 @@ const COLORS = {
 };
 
 // ── World map ──
-// Build a hand-crafted market layout
 const world = [];
 for (let y = 0; y < H; y++) {
   world[y] = [];
@@ -217,52 +317,51 @@ for (let y = 0; y < H; y++)
 
 // ── Stall builder ──
 function buildStall(sx, sy, color, stallId) {
-  // Back wall
   for (let x = sx; x < sx+7; x++) {
     world[sy][x]   = { tile: T.WALL, walkable: false, stall: null };
     world[sy+1][x] = { tile: T.WALL, walkable: false, stall: null };
   }
-  // Roof row
   for (let x = sx-1; x < sx+8; x++)
     if (world[sy-1] && world[sy-1][x])
       world[sy-1][x] = { tile: T.ROOF, walkable: false, stall: null };
-  // Counter (front of stall)
   for (let x = sx; x < sx+7; x++)
     world[sy+2][x] = { tile: T.COUNTER, walkable: false, stall: stallId };
-  // Interaction tiles in front of counter
   for (let x = sx; x < sx+7; x++)
     if (world[sy+3] && world[sy+3][x])
       world[sy+3][x].stall = stallId;
-  // Torches
   if (world[sy-1][sx])   world[sy-1][sx]   = { tile: T.TORCH, walkable: false, stall: null };
   if (world[sy-1][sx+6]) world[sy-1][sx+6] = { tile: T.TORCH, walkable: false, stall: null };
 }
 
-// Three stalls across the top half
-buildStall(4,  5, '#ff4444', 'racing');
-buildStall(20, 5, '#44ff88', 'typing');
-buildStall(36, 5, '#aa44ff', 'trivia');
+// Three stalls evenly spread across the wider world
+buildStall(5,  5, '#ff4444', 'racing');
+buildStall(27, 5, '#44ff88', 'typing');
+buildStall(49, 5, '#aa44ff', 'trivia');
 
-// Decorative flowers and fences
-const flowerSpots = [[3,12],[3,13],[8,14],[15,12],[15,13],[24,14],[31,12],[31,13],[38,14],[44,12],[44,13]];
+// Decorative flowers spread across the larger world
+const flowerSpots = [
+  [3,14],[3,15],[10,16],[18,14],[18,15],[26,16],
+  [34,14],[34,15],[42,16],[50,14],[50,15],[57,16],
+  [3,26],[57,26],[3,32],[57,32],[20,32],[40,32],
+];
 flowerSpots.forEach(([x,y]) => { if (world[y] && world[y][x]) world[y][x] = { tile: T.FLOWER, walkable: false, stall: null }; });
 
-// Central fountain (decorative, unwalkable)
-const cx = 23, cy = 16;
+// Central fountain repositioned to new world center
+const cx = 30, cy = 24;
 for (let dy = -2; dy <= 2; dy++)
   for (let dx = -2; dx <= 2; dx++)
     if (Math.abs(dx) + Math.abs(dy) <= 3)
       world[cy+dy][cx+dx] = { tile: T.STONE, walkable: dx === 0 && dy === 0, stall: null };
 
-// ── Stall metadata ──
+// ── Stall metadata — label positions match new stall x coords ──
 const STALLS = {
-  racing: { label: 'PIXEL RACER',   color: '#ff4444', glow: '#ff0000', sign: '🏎', x: 7,  y: 6 },
-  typing: { label: 'TYPING TEST',   color: '#44ff88', glow: '#00ff44', sign: '⌨',  x: 23, y: 6 },
-  trivia: { label: 'TRIVIA',        color: '#aa44ff', glow: '#8800ff', sign: '🧠', x: 39, y: 6 },
+  racing: { label: 'PIXEL RACER', color: '#ff4444', glow: '#ff0000', sign: '🏎', x: 8,  y: 6 },
+  typing: { label: 'TYPING TEST', color: '#44ff88', glow: '#00ff44', sign: '⌨',  x: 30, y: 6 },
+  trivia: { label: 'TRIVIA',      color: '#aa44ff', glow: '#8800ff', sign: '🧠', x: 52, y: 6 },
 };
 
-// ── Player ──
-const player = { wx: 23 * TILE + 8, wy: 22 * TILE + 8, speed: 1.5, size: 10, facing: 0, animFrame: 0, animTimer: 0, moving: false };
+// ── Player — spawn at world center ──
+const player = { wx: 30 * TILE + 8, wy: 30 * TILE + 8, speed: 1.5, size: 10, facing: 0, animFrame: 0, animTimer: 0, moving: false };
 let camX = 0, camY = 0, tick = 0;
 
 // ── Input ──
@@ -333,7 +432,7 @@ function update() {
 
 function openStall(id) {
   if (id === 'racing') { openOverlay('racingOverlay'); }
-  else if (id === 'typing') { openOverlay('typingOverlay'); startTyping(); }
+  else if (id === 'typing') { openOverlay('typingOverlay'); showModeSelect(); }
   else if (id === 'trivia') { openOverlay('triviaOverlay'); startTrivia(); }
 }
 
@@ -544,31 +643,123 @@ function racingLoop() {
 // ══════════════════════════════════════════════════════════════
 //  MINI GAME 2: TYPING TEST
 // ══════════════════════════════════════════════════════════════
-const TYPING_TEXTS = [
-  "the quick brown fox jumps over the lazy dog near the riverbank",
-  "pixel worlds are built one tile at a time with patience and code",
-  "every great website starts with a single line of html on a blank page",
-  "practice makes perfect when it comes to typing fast and accurately",
-  "the stars above the cobblestone market glow like ancient torches",
-  "keyboards were invented to turn thoughts into words at the speed of light",
+
+// ── Casual quotes ──
+const CASUAL_QUOTES = [
+  // Movies
+  { text: "why so serious", source: "The Dark Knight" },
+  { text: "you cant handle the truth", source: "A Few Good Men" },
+  { text: "to infinity and beyond", source: "Toy Story" },
+  { text: "just keep swimming just keep swimming", source: "Finding Nemo" },
+  { text: "life is like a box of chocolates you never know what youre gonna get", source: "Forrest Gump" },
+  { text: "i am inevitable", source: "Avengers Endgame" },
+  { text: "with great power comes great responsibility", source: "Spider-Man" },
+  { text: "you shall not pass", source: "Lord of the Rings" },
+  { text: "i see dead people", source: "The Sixth Sense" },
+  { text: "hakuna matata what a wonderful phrase", source: "The Lion King" },
+  // Anime
+  { text: "i am the one who will surpass every hokage that came before me", source: "Naruto" },
+  { text: "if you dont take risks you cant create a future", source: "One Piece" },
+  { text: "people who cant throw something important away can never hope to change anything", source: "Fullmetal Alchemist" },
+  { text: "im going to be a hero that surpasses all others", source: "My Hero Academia" },
+  { text: "the world is merciless and its also very beautiful", source: "Attack on Titan" },
+  { text: "whatever you lose you will find it again but what you throw away you will never get back", source: "Fullmetal Alchemist" },
+  { text: "a lesson without pain is meaningless for you cannot gain something without sacrificing something else", source: "Fullmetal Alchemist Brotherhood" },
+  { text: "power comes in response to a need not a desire", source: "Dragon Ball Z" },
+  // Shows
+  { text: "winter is coming", source: "Game of Thrones" },
+  { text: "i am the one who knocks", source: "Breaking Bad" },
+  { text: "how you doin", source: "Friends" },
+  { text: "we were on a break", source: "Friends" },
+  { text: "that is what i do i drink and i know things", source: "Game of Thrones" },
+  { text: "the things you own end up owning you", source: "Fight Club" },
 ];
 
+// ── Competitive word pool ──
+const COMP_WORDS = [
+  "the","be","to","of","and","a","in","that","have","it","for","not","on","with",
+  "he","as","you","do","at","this","but","his","by","from","they","we","say",
+  "her","she","or","an","will","my","one","all","would","there","their","what",
+  "so","up","out","if","about","who","get","which","go","me","when","make","can",
+  "like","time","no","just","him","know","take","people","into","year","your",
+  "good","some","could","them","see","other","than","then","now","look","only",
+  "come","its","over","think","also","back","after","use","two","how","our",
+  "work","first","well","way","even","new","want","because","any","these","give",
+  "day","most","us","great","between","need","large","often","hand","high","place",
+  "hold","turn","move","live","bring","write","stand","own","form","free","real",
+  "run","power","town","fast","play","game","world","type","word","next","black",
+  "white","green","night","light","might","right","sight","fight","quite","write",
+  "stone","fire","water","earth","space","clock","track","break","dream","sleep",
+  "speak","reach","teach","beach","chest","quest","crest","blend","trend","spend",
+];
+
+// ── Shared state ──
+let tMode = null; // 'casual' | 'competitive'
 let tText = '', tTyped = 0, tErrors = 0, tStartTime = null, tDone = false, tTimer = null;
 
-function startTyping() {
+// ── Competitive state ──
+let compDuration = 15;
+let compTimeLeft = 15;
+let compWords = [];
+let compWordIndex = 0;
+let compCorrectWords = 0;
+let compTotalCharsTyped = 0;
+let compTotalErrors = 0;
+let compCountdownInterval = null;
+
+// ── Show mode select when overlay opens ──
+function startTyping() { showModeSelect(); }
+
+function showModeSelect() {
+  document.getElementById('typingModeSelect').style.display = 'block';
+  document.getElementById('typingGameArea').style.display = 'none';
+  resetTypingStats();
+}
+
+function backToModeSelect() {
   clearInterval(tTimer);
-  tText = TYPING_TEXTS[Math.floor(Math.random() * TYPING_TEXTS.length)];
+  clearInterval(compCountdownInterval);
+  showModeSelect();
+}
+
+function selectTypingMode(mode) {
+  tMode = mode;
+  document.getElementById('typingModeSelect').style.display = 'none';
+  document.getElementById('typingGameArea').style.display = 'block';
+  document.getElementById('typingModeLabel').textContent = mode === 'casual' ? '🎬 CASUAL MODE' : '⚡ COMPETITIVE MODE';
+
+  if (mode === 'casual') {
+    document.getElementById('compTimeSelect').style.display = 'none';
+    document.getElementById('compWordDisplay').style.display = 'none';
+    document.getElementById('compCountdown').style.display = 'none';
+    document.getElementById('typingPrompt').style.display = 'block';
+    launchCasual();
+  } else {
+    document.getElementById('compTimeSelect').style.display = 'block';
+    document.getElementById('compWordDisplay').style.display = 'block';
+    document.getElementById('compCountdown').style.display = 'block';
+    document.getElementById('typingPrompt').style.display = 'none';
+    launchCompetitive();
+  }
+}
+
+function restartTyping() { selectTypingMode(tMode); }
+
+// ── CASUAL ──
+function launchCasual() {
+  clearInterval(tTimer);
+  const pick = CASUAL_QUOTES[Math.floor(Math.random() * CASUAL_QUOTES.length)];
+  tText = pick.text;
   tTyped = 0; tErrors = 0; tStartTime = null; tDone = false;
+  resetTypingStats();
+  document.getElementById('typingModeLabel').textContent = `🎬 CASUAL — ${pick.source}`;
   document.getElementById('typingInput').value = '';
   document.getElementById('typingInput').disabled = false;
   document.getElementById('typingInput').focus();
-  document.getElementById('tWpm').textContent = '—';
-  document.getElementById('tAcc').textContent = '—';
-  document.getElementById('tTime').textContent = '—';
-  renderTypingPrompt(0);
+  renderCasualPrompt(0);
 }
 
-function renderTypingPrompt(pos) {
+function renderCasualPrompt(pos) {
   const el = document.getElementById('typingPrompt');
   let html = '';
   for (let i = 0; i < tText.length; i++) {
@@ -585,34 +776,145 @@ function renderTypingPrompt(pos) {
   el.innerHTML = html;
 }
 
+// ── COMPETITIVE ──
+function setCompTime(secs, btn) {
+  compDuration = secs;
+  document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  launchCompetitive();
+}
+
+function launchCompetitive() {
+  clearInterval(tTimer);
+  clearInterval(compCountdownInterval);
+  compWords = generateCompWords(120);
+  compWordIndex = 0; compCorrectWords = 0; compTotalCharsTyped = 0; compTotalErrors = 0;
+  compTimeLeft = compDuration; tStartTime = null; tDone = false;
+  resetTypingStats();
+  document.getElementById('typingInput').value = '';
+  document.getElementById('typingInput').disabled = false;
+  document.getElementById('typingInput').focus();
+  document.getElementById('compWordStatus').textContent = '';
+  renderCompCountdown();
+  renderCompRibbon();
+}
+
+function generateCompWords(count) {
+  const pool = [...COMP_WORDS];
+  const result = [];
+  for (let i = 0; i < count; i++)
+    result.push(pool[Math.floor(Math.random() * pool.length)]);
+  return result;
+}
+
+function renderCompRibbon() {
+  const ribbon = document.getElementById('compWordRibbon');
+  ribbon.innerHTML = '';
+  const visible = compWords.slice(compWordIndex, compWordIndex + 10);
+  visible.forEach((word, i) => {
+    const span = document.createElement('span');
+    span.className = 'comp-word' + (i === 0 ? ' active' : '');
+    span.textContent = word;
+    ribbon.appendChild(span);
+  });
+  // Refill pool if running low
+  if (compWordIndex + 15 >= compWords.length) {
+    compWords = compWords.concat(generateCompWords(60));
+  }
+}
+
+function renderCompCountdown() {
+  const el = document.getElementById('compCountdown');
+  el.textContent = compTimeLeft + 's';
+  el.classList.toggle('urgent', compTimeLeft <= 5);
+}
+
+function startCompTimer() {
+  compCountdownInterval = setInterval(() => {
+    compTimeLeft--;
+    renderCompCountdown();
+    if (compTimeLeft <= 0) finishCompetitive();
+  }, 1000);
+}
+
+function finishCompetitive() {
+  clearInterval(compCountdownInterval);
+  tDone = true;
+  document.getElementById('typingInput').disabled = true;
+  document.getElementById('compWordRibbon').innerHTML = '';
+  document.getElementById('compCountdown').textContent = '0s';
+
+  const wpm = Math.round((compCorrectWords / compDuration) * 60);
+  const totalAttempted = compCorrectWords + (compWordIndex - compCorrectWords);
+  const acc = totalAttempted > 0 ? Math.round((compCorrectWords / Math.max(compWordIndex, 1)) * 100) : 100;
+  document.getElementById('tWpm').textContent = wpm;
+  document.getElementById('tAcc').textContent = acc + '%';
+  document.getElementById('tTime').textContent = compDuration + 's';
+  document.getElementById('compWordStatus').textContent = `✔ ${compCorrectWords} correct words`;
+}
+
+// ── Shared input handler ──
 document.getElementById('typingInput').addEventListener('input', function() {
   if (tDone) return;
-  if (!tStartTime) { tStartTime = Date.now(); tTimer = setInterval(updateTypingTime, 200); }
-  const val = this.value;
-  tTyped = val.length;
-  tErrors = 0;
-  for (let i = 0; i < val.length; i++) if (val[i] !== tText[i]) tErrors++;
-  renderTypingPrompt(tTyped);
-  if (val === tText) finishTyping();
+
+  if (tMode === 'casual') {
+    if (!tStartTime) { tStartTime = Date.now(); tTimer = setInterval(updateCasualTime, 200); }
+    const val = this.value;
+    tTyped = val.length;
+    tErrors = 0;
+    for (let i = 0; i < val.length; i++) if (val[i] !== tText[i]) tErrors++;
+    renderCasualPrompt(tTyped);
+    if (val === tText) finishCasual();
+
+  } else if (tMode === 'competitive') {
+    if (!tStartTime) { tStartTime = Date.now(); startCompTimer(); }
+    // Space or end of input = word submitted
+  }
 });
 
-function updateTypingTime() {
+// Competitive: detect spacebar to advance word
+document.getElementById('typingInput').addEventListener('keydown', function(e) {
+  if (tMode !== 'competitive' || tDone) return;
+  if (e.key === ' ') {
+    e.preventDefault();
+    const typed = this.value.trim();
+    const target = compWords[compWordIndex];
+    if (typed === target) {
+      compCorrectWords++;
+      document.getElementById('compWordStatus').textContent = '';
+    } else {
+      compTotalErrors++;
+      document.getElementById('compWordStatus').textContent = `✖ was: ${target}`;
+      // Flash active word red briefly
+      const active = document.querySelector('.comp-word.active');
+      if (active) { active.classList.add('wrong-flash'); setTimeout(() => active.classList.remove('wrong-flash'), 300); }
+    }
+    compWordIndex++;
+    this.value = '';
+    renderCompRibbon();
+  }
+});
+
+function updateCasualTime() {
   if (!tStartTime || tDone) return;
   const elapsed = (Date.now() - tStartTime) / 1000;
   document.getElementById('tTime').textContent = elapsed.toFixed(1) + 's';
-  const words = tTyped / 5;
-  document.getElementById('tWpm').textContent = Math.round(words / (elapsed / 60));
+  document.getElementById('tWpm').textContent = Math.round((tTyped / 5) / (elapsed / 60));
 }
 
-function finishTyping() {
+function finishCasual() {
   tDone = true; clearInterval(tTimer);
   document.getElementById('typingInput').disabled = true;
   const elapsed = (Date.now() - tStartTime) / 1000;
-  const wpm = Math.round((tText.length / 5) / (elapsed / 60));
-  const acc = Math.round(((tText.length - tErrors) / tText.length) * 100);
-  document.getElementById('tWpm').textContent = wpm;
-  document.getElementById('tAcc').textContent = acc + '%';
+  document.getElementById('tWpm').textContent = Math.round((tText.length / 5) / (elapsed / 60));
+  document.getElementById('tAcc').textContent = Math.round(((tText.length - tErrors) / tText.length) * 100) + '%';
   document.getElementById('tTime').textContent = elapsed.toFixed(1) + 's';
+}
+
+function resetTypingStats() {
+  document.getElementById('tWpm').textContent = '—';
+  document.getElementById('tAcc').textContent = '—';
+  document.getElementById('tTime').textContent = '—';
 }
 
 

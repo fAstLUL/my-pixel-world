@@ -7,13 +7,16 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  html, body {
+    width: 100%; height: 100%;
+  }
+
   body {
     background: #0a0a0f;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100vh;
     font-family: 'Courier New', monospace;
     overflow: hidden;
     user-select: none;
@@ -137,7 +140,7 @@
 <body>
 
 <div id="ui">⬛ MY WORLD ⬛</div>
-<canvas id="gameCanvas" width="640" height="400"></canvas>
+<canvas id="gameCanvas" width="960" height="600"></canvas>
 <div id="hud">WASD / ARROW KEYS TO MOVE &nbsp;|&nbsp; ENTER / E TO INTERACT</div>
 <div id="passwordModal">
   <h2>🔒 PLEX ACCESS</h2>
