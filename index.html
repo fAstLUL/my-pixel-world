@@ -43,6 +43,78 @@
     opacity: 0.5;
   }
 
+  #passwordModal {
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: #050f05;
+    border: 2px solid #e5a00d;
+    box-shadow: 0 0 40px #e5a00d55;
+    padding: 28px 36px;
+    font-family: 'Courier New', monospace;
+    text-align: center;
+    z-index: 100;
+    min-width: 260px;
+  }
+  #passwordModal h2 {
+    color: #e5a00d;
+    font-size: 12px;
+    letter-spacing: 3px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  #passwordModal p {
+    color: #7a6030;
+    font-size: 10px;
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+  }
+  #pinDisplay {
+    font-size: 28px;
+    letter-spacing: 10px;
+    color: #e5a00d;
+    background: #0a1a00;
+    border: 1px solid #3a2a00;
+    padding: 10px 20px;
+    margin-bottom: 16px;
+    min-width: 120px;
+    display: inline-block;
+  }
+  #pinError {
+    color: #ff4444;
+    font-size: 10px;
+    letter-spacing: 2px;
+    height: 14px;
+    margin-bottom: 12px;
+  }
+  #pinKeypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  #pinKeypad button, #pinCancel {
+    background: #0f2a00;
+    border: 1px solid #3a5a1a;
+    color: #90df90;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    padding: 10px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: background 0.1s, color 0.1s;
+  }
+  #pinKeypad button:hover { background: #1a4a00; color: #e5a00d; border-color: #e5a00d; }
+  #pinCancel {
+    width: 100%;
+    font-size: 11px;
+    margin-top: 4px;
+    color: #5a4a2a;
+    border-color: #2a2a1a;
+  }
+  #pinCancel:hover { background: #1a0000; color: #ff4444; border-color: #ff4444; }
+
   #notification {
     position: fixed;
     top: 20px;
@@ -67,6 +139,27 @@
 <div id="ui">⬛ MY WORLD ⬛</div>
 <canvas id="gameCanvas" width="640" height="400"></canvas>
 <div id="hud">WASD / ARROW KEYS TO MOVE &nbsp;|&nbsp; ENTER / E TO INTERACT</div>
+<div id="passwordModal">
+  <h2>🔒 PLEX ACCESS</h2>
+  <p>ENTER 4-DIGIT PIN</p>
+  <div id="pinDisplay">____</div>
+  <div id="pinError"></div>
+  <div id="pinKeypad">
+    <button onclick="pinPress('1')">1</button>
+    <button onclick="pinPress('2')">2</button>
+    <button onclick="pinPress('3')">3</button>
+    <button onclick="pinPress('4')">4</button>
+    <button onclick="pinPress('5')">5</button>
+    <button onclick="pinPress('6')">6</button>
+    <button onclick="pinPress('7')">7</button>
+    <button onclick="pinPress('8')">8</button>
+    <button onclick="pinPress('9')">9</button>
+    <button onclick="pinPress('back')">⌫</button>
+    <button onclick="pinPress('0')">0</button>
+    <button onclick="pinPress('enter')">↵</button>
+  </div>
+  <button id="pinCancel" onclick="closePin()">CANCEL</button>
+</div>
 <div id="notification"></div>
 
 <script>
@@ -125,7 +218,7 @@ const COLORS = {
 const PORTALS = [
   { id: T.PORTAL_FILES,  label: '[ FILES ]',   color: '#ff9944', glow: '#ff6600', x: 15, y: 10, desc: 'Cloud Files' },
   { id: T.PORTAL_PLEX,   label: '[ PLEX ]',    color: '#e5a00d', glow: '#e5a00d', x: 35, y: 8,  desc: 'Media Server', url: 'https://www.plex.tv' },
-  { id: T.PORTAL_GAMES,  label: '[ GAMES ]',   color: '#44aaff', glow: '#0066ff', x: 55, y: 12, desc: 'Mini Games' },
+  { id: T.PORTAL_GAMES,  label: '[ GAMES ]',   color: '#44aaff', glow: '#0066ff', x: 55, y: 12, desc: 'Mini Games', url: 'games-market.html' },
   { id: T.PORTAL_ABOUT,  label: '[ ABOUT ]',   color: '#aa44ff', glow: '#6600ff', x: 25, y: 35, desc: 'About Me' },
 ];
 
@@ -225,10 +318,78 @@ const player = {
 // Camera offset (world pixel coords of top-left of viewport)
 let camX = 0, camY = 0;
 
+// ─── PIN / PASSWORD ──────────────────────────────────────────────────────────
+const PIN_CORRECT = '2926';
+let pinValue = '';
+let pinTargetUrl = null;
+const pinModal = document.getElementById('passwordModal');
+const pinDisplay = document.getElementById('pinDisplay');
+const pinError  = document.getElementById('pinError');
+
+function openPin(url) {
+  pinValue = '';
+  pinTargetUrl = url;
+  pinError.textContent = '';
+  updatePinDisplay();
+  pinModal.style.display = 'block';
+}
+
+function closePin() {
+  pinModal.style.display = 'none';
+  pinValue = '';
+  pinTargetUrl = null;
+}
+
+function updatePinDisplay() {
+  const filled = pinValue.padEnd(4, '_').split('').join(' ');
+  // Show digits as bullets while typing for security feel
+  const masked = pinValue.replace(/./g, '●').padEnd(4, '_').split('').join(' ');
+  pinDisplay.textContent = masked;
+}
+
+function pinPress(key) {
+  if (key === 'back') {
+    pinValue = pinValue.slice(0, -1);
+    pinError.textContent = '';
+    updatePinDisplay();
+  } else if (key === 'enter') {
+    checkPin();
+  } else if (pinValue.length < 4) {
+    pinValue += key;
+    updatePinDisplay();
+    if (pinValue.length === 4) checkPin();
+  }
+}
+
+function checkPin() {
+  if (pinValue === PIN_CORRECT) {
+    closePin();
+    showNotif('→ ACCESS GRANTED: MEDIA SERVER');
+    window.open(pinTargetUrl, '_blank');
+  } else {
+    pinError.textContent = '✖ INCORRECT PIN';
+    pinValue = '';
+    updatePinDisplay();
+  }
+}
+
 // ─── INPUT ───────────────────────────────────────────────────────────────────
 const keys = {};
-window.addEventListener('keydown', e => { keys[e.key] = true; e.preventDefault(); });
-window.addEventListener('keyup',   e => { keys[e.key] = false; });
+window.addEventListener('keydown', e => {
+  if (pinModal.style.display === 'block') {
+    if (e.key >= '0' && e.key <= '9') pinPress(e.key);
+    else if (e.key === 'Backspace') pinPress('back');
+    else if (e.key === 'Enter') pinPress('enter');
+    else if (e.key === 'Escape') closePin();
+    e.preventDefault();
+    return;
+  }
+  keys[e.key] = true;
+  e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+
 
 // ─── NOTIFICATION ────────────────────────────────────────────────────────────
 let notifTimer = 0;
@@ -306,8 +467,14 @@ function update() {
     const pty = Math.floor(player.wy / TILE);
     const cell = world[pty] && world[pty][ptx];
     if (cell && cell.portal) {
-      showNotif(`→ ENTERING: ${cell.portal.desc.toUpperCase()}`);
-      if (cell.portal.url) window.open(cell.portal.url, '_blank');
+      if (cell.portal.id === T.PORTAL_PLEX) {
+        openPin(cell.portal.url);
+      } else if (cell.portal.url) {
+        showNotif(`→ ENTERING: ${cell.portal.desc.toUpperCase()}`);
+        setTimeout(() => { window.location.href = cell.portal.url; }, 600);
+      } else {
+        showNotif(`→ ENTERING: ${cell.portal.desc.toUpperCase()}`);
+      }
       keys['Enter'] = false; keys['e'] = false; keys['E'] = false;
     }
   }
